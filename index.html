@@ -315,8 +315,7 @@
 
 <header>
   <h1>🌶️ 고추 손해정도 비율 계산</h1>
-  <!-- 2) 제목 하단 문구 2026년 조사용(ver 1.0)으로 변경 -->
-  <p>2026년 조사용(ver 1.0)</p>
+  <p>2026년 조사용(ver 1.1)</p>
 </header>
 
 <div class="controls">
@@ -426,7 +425,6 @@ function createSampleCard(index) {
     saveCurrentState();
   });
   
-  // 1) 합계 클릭 시 입력한 기존 수치를 지워주어 쉽게 타이핑하도록 개선
   totalInput.addEventListener('focus', () => {
     totalInput.value = '';
   });
@@ -482,6 +480,55 @@ function fillBlanks(card) {
     return;
   }
 
+  const excludedVal = getCellValue(card, '평가제외') || 0;
+  const usableTotal = targetTotal - excludedVal;
+
+  if (usableTotal < 0) {
+    alert('평가제외 개수가 합계보다 클 수 없습니다.');
+    return;
+  }
+
+  // ★ 중요 추가: 극단값(0% 및 100%) 예외 처리 적용
+  // 수치 분배 가중치 필터를 완전히 바이패스(우회)하여 다른 칸에 소수점이 퍼지지 않도록 강제 정렬합니다.
+  if (targetDamage === 0) {
+    FILLABLE.forEach(cat => {
+      const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
+      if (cat === '정상') {
+        input.value = usableTotal;
+      } else {
+        input.value = 0;
+      }
+      setCellState(input, 'auto');
+    });
+
+    totalInput.value = targetTotal;
+    damageInput.value = "0.00";
+    setCellState(totalInput, 'auto');
+    setCellState(damageInput, 'auto');
+    updateSummary();
+    return;
+  }
+
+  if (targetDamage === 100) {
+    FILLABLE.forEach(cat => {
+      const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
+      if (cat === '100%') {
+        input.value = usableTotal;
+      } else {
+        input.value = 0;
+      }
+      setCellState(input, 'auto');
+    });
+
+    totalInput.value = targetTotal;
+    damageInput.value = "100.00";
+    setCellState(totalInput, 'auto');
+    setCellState(damageInput, 'auto');
+    updateSummary();
+    return;
+  }
+
+  // 일반 비율 역산 처리 구간 (수동 입력 자연수값 보호)
   const known = {};
   const unknown = [];
 
@@ -493,8 +540,6 @@ function fillBlanks(card) {
       unknown.push(cat);
     }
   });
-
-  const excludedVal = getCellValue(card, '평가제외') || 0;
 
   if (unknown.length === 0) {
     alert('역산하여 채울 빈 칸이 부족합니다. 수동 입력한 숫자 일부를 지우고 실행해 주세요.');
@@ -816,7 +861,7 @@ function saveCurrentState() {
   });
 
   localStorage.setItem('pepper_ridgeCount', ridgeCount);
-  localStorage.setItem('pepper_cardsData', JSON.stringify(catsData));
+  localStorage.setItem('pepper_cardsData', JSON.stringify(cardsData));
 
   if (document.getElementById('areaDamageRate')) {
     localStorage.setItem('cumu_areaDamageRate', document.getElementById('areaDamageRate').value);
