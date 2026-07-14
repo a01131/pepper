@@ -3,6 +3,340 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>고추 손해정도 비율 계산</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root {
+    --bg: #F5F3EC;
+    --surface: #FFFFFF;
+    --ink: #1F2A22;
+    --ink-soft: #5B6B5E;
+    --auto: #D32F2F; 
+    --auto-bg: #FBEAEA;
+    --manual-bg: #F3F2ED;
+    --green-deep: #2F5233;
+    --green-mid: #3F6B44;
+    --red: #C0392B;
+    --red-bg: #FBEAEA;
+    --border: #DAD6C8;
+    --amber: #B8823A;
+    --blue-deep: #1A365D;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Noto Sans KR", sans-serif;
+    padding-bottom: 48px;
+  }
+
+  header {
+    background: var(--green-deep);
+    color: #FBF9F2;
+    padding: 18px 16px 16px;
+  }
+
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #CFE0CE;
+  }
+
+  .controls {
+    max-width: 720px;
+    margin: 14px auto 0;
+    padding: 0 16px;
+  }
+
+  .ridge-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+
+  .ridge-row label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--green-deep);
+    white-space: nowrap;
+  }
+
+  .ridge-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  button {
+    font-family: inherit;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+  button:active { opacity: 0.75; }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  .btn-primary { background: var(--green-deep); color: #fff; }
+  .btn-fill { background: var(--amber); color: #fff; }
+  .btn-save { background: #2E5AAC; color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--border); }
+  .btn-danger { background: #c0392b; color: #fff; padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; margin-left: auto;}
+
+  .legend {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin-top: 10px;
+    padding: 0 4px;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    width: 100%;
+  }
+
+  .legend .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+  .dot-manual { background: var(--ink); }
+  .dot-auto { background: var(--auto); }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px 16px 0;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .card-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--green-deep);
+    margin-bottom: 10px;
+  }
+
+  .card-title .pepper { font-size: 0.9em; }
+
+  .cell-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .cell {
+    background: var(--manual-bg);
+    border-radius: 8px;
+    padding: 6px 4px 5px;
+    text-align: center;
+  }
+
+  .cell label {
+    display: block;
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    margin-bottom: 3px;
+    font-weight: 600;
+  }
+
+  .cell input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 0;
+    border-bottom: 2px solid var(--border);
+    color: var(--ink);
+  }
+
+  .cell input.manual { color: var(--ink); border-bottom-color: var(--ink); }
+  .cell input.auto   { color: var(--auto); border-bottom-color: var(--auto); font-weight: 700; }
+  .cell input:focus { outline: none; }
+
+  .cell.excluded { background: var(--red-bg); }
+  .cell.excluded label { color: var(--red); }
+
+  .result-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .result-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--manual-bg);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+
+  .result-field label {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .result-field input {
+    width: 64px;
+    border: none;
+    background: transparent;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .result-field input.manual { color: var(--ink); }
+  .result-field input.auto   { color: var(--auto); }
+  .result-field input:focus { outline: none; }
+
+  .card.summary {
+    border: 2px solid var(--green-deep);
+  }
+  .card.summary .card-title { color: var(--green-deep); }
+  .card.summary .cell input,
+  .card.summary .result-field input { color: var(--auto); font-weight: 700; }
+
+  .card.cumulative {
+    border: 2px solid var(--blue-deep);
+  }
+  .card.cumulative .card-title { color: var(--blue-deep); }
+  .card.cumulative .cell { background: #EDF2F7; }
+  .card.cumulative .cell input { color: var(--ink); border-bottom-color: #CBD5E0; }
+  .card.cumulative .cell input:focus { border-bottom-color: var(--blue-deep); }
+  .card.cumulative .cell input.readonly-input { color: var(--auto); font-weight: 700; }
+  
+  .cumu-result-row {
+    margin-top: 12px;
+    background: #EBF8FF;
+    border: 1px solid #BEE3F8;
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cumu-result-title { font-weight: 700; color: var(--blue-deep); font-size: 1rem; }
+  .cumu-result-value { font-size: 1.3rem; font-weight: 800; color: var(--auto); font-variant-numeric: tabular-nums; margin-right: auto; margin-left: 10px;}
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 24, 20, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 50;
+  }
+
+  .modal-box {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .modal-box img {
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .modal-box p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .empty-hint {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    padding: 24px 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌶️ 고추 손해정도 비율 계산</h1>
+  <!-- 2) 제목 하단 문구 2026년 조사용(ver 1.0)으로 변경 -->
+  <p>2026년 조사용(ver 1.0)</p>
+</header>
+
+<div class="controls">
+  <div class="ridge-row">
+    <label for="ridgeCount">표본이랑수</label>
+    <input id="ridgeCount" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="4, 6, 8, 10 중 입력">
+    <button class="btn-primary" id="generateBtn">표 생성</button>
+  </div>
+  <div class="legend">
+    <span><span class="dot dot-manual"></span>직접입력</span>
+    <span><span class="dot dot-auto"></span>자동생성(채워줘)</span>
+    <button class="btn-danger" id="clearAllBtn">전체 초기화</button>
+  </div>
+</div>
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>고추 손해정도 비율 및 누적피해율 계산</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
@@ -315,7 +649,8 @@
 
 <header>
   <h1>🌶️ 고추 손해정도 비율 계산</h1>
-  <p>농작물손해보험 피해조사용</p>
+  <!-- 2) 제목 하단 문구 2026년 조사용(ver 1.0)으로 변경 -->
+  <p>2026년 조사용(ver 1.0)</p>
 </header>
 
 <div class="controls">
@@ -425,6 +760,11 @@ function createSampleCard(index) {
     saveCurrentState();
   });
   
+  // 1) 합계 클릭 시 입력한 기존 수치를 지워주어 쉽게 타이핑하도록 개선
+  totalInput.addEventListener('focus', () => {
+    totalInput.value = '';
+  });
+  
   damageInput.addEventListener('input', () => {
     setCellState(damageInput, 'manual');
     saveCurrentState();
@@ -465,7 +805,6 @@ function recalcSample(card) {
   updateSummary();
 }
 
-// 완전히 개선된 지능형 채워줘(역산) 함수
 function fillBlanks(card) {
   const totalInput = card.querySelector('[data-role="total"]');
   const damageInput = card.querySelector('[data-role="damage"]');
@@ -480,7 +819,6 @@ function fillBlanks(card) {
   const known = {};
   const unknown = [];
 
-  // 핵심 변경: 사용자가 직접 입력한 '1 이상의 정수'만 보호(known)하고, 0 또는 빈칸은 모두 역산 대상(unknown)으로 흡수
   FILLABLE.forEach(cat => {
     const v = getCellValue(card, cat);
     if (v !== null && v > 0) {
@@ -602,7 +940,6 @@ function fillBlanks(card) {
     }
   }
 
-  // 0으로 채워질 대상을 포함해 역산 결과 반영
   FILLABLE.forEach(cat => {
     const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
     if (unknown.includes(cat)) {
@@ -612,7 +949,6 @@ function fillBlanks(card) {
     }
   });
 
-  // 역산이 완전히 끝난 후 정합성 재계산
   const finalValues = {};
   CATEGORIES.forEach(cat => {
     const v = getCellValue(card, cat);
@@ -625,7 +961,6 @@ function fillBlanks(card) {
   const finalDamage = finalDenom > 0 ? (finalWeighted/finalDenom*100) : 0;
 
   totalInput.value = finalTotal;
-  // 역산 보정된 실제 도달 가능한 정수 근사비율을 매칭 반영
   damageInput.value = finalDamage.toFixed(2);
   setCellState(totalInput, 'auto');
   setCellState(damageInput, 'auto');
@@ -815,7 +1150,640 @@ function saveCurrentState() {
   });
 
   localStorage.setItem('pepper_ridgeCount', ridgeCount);
-  localStorage.setItem('pepper_cardsData', JSON.stringify(cardsData));
+  localStorage.setItem('pepper_cardsData', JSON.stringify(catsData));
+
+  if (document.getElementById('areaDamageRate')) {
+    localStorage.setItem('cumu_areaDamageRate', document.getElementById('areaDamageRate').value);
+    localStorage.setItem('cumu_nonInsuredRate', document.getElementById('nonInsuredRate').value);
+    localStorage.setItem('cumu_pestRecognizeRate', document.getElementById('pestRecognizeRate').value);
+    localStorage.setItem('cumu_elapsedRate', document.getElementById('elapsedRate').value);
+  }
+}
+
+function loadSavedData() {
+  const savedRidgeCount = localStorage.getItem('pepper_ridgeCount');
+  const savedCardsData = localStorage.getItem('pepper_cardsData');
+
+  if (savedRidgeCount && savedCardsData) {
+    document.getElementById('ridgeCount').value = savedRidgeCount;
+    const cardsData = JSON.parse(savedCardsData);
+    
+    const container = document.getElementById('samplesContainer');
+    container.innerHTML = '';
+    sampleCards = [];
+
+    cardsData.forEach(data => {
+      const card = createSampleCard(data.index);
+      container.appendChild(card);
+      sampleCards.push(card);
+
+      CATEGORIES.forEach(cat => {
+        const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
+        input.value = data.categories[cat];
+        if (data.categories[cat] !== '') {
+          setCellState(input, 'manual');
+        }
+      });
+
+      const totalInput = card.querySelector('[data-role="total"]');
+      const damageInput = card.querySelector('[data-role="damage"]');
+      totalInput.value = data.total;
+      damageInput.value = data.damage;
+      setCellState(totalInput, data.totalState);
+      setCellState(damageInput, data.damageState);
+    });
+
+    renderSummaryCard();
+    renderCumulativeCard();
+    updateSummary();
+
+    document.getElementById('areaDamageRate').value = localStorage.getItem('cumu_areaDamageRate') || '100.0';
+    document.getElementById('nonInsuredRate').value = localStorage.getItem('cumu_nonInsuredRate') || '';
+    document.getElementById('pestRecognizeRate').value = localStorage.getItem('cumu_pestRecognizeRate') || '';
+    document.getElementById('elapsedRate').value = localStorage.getItem('cumu_elapsedRate') || '';
+    recalcCumulative();
+    
+    document.getElementById('emptyHint').style.display = 'none';
+  }
+}
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (confirm('입력 및 생성된 모든 데이터를 지우고 처음 상태로 초기화하시겠습니까?')) {
+    localStorage.clear();
+    document.getElementById('ridgeCount').value = '';
+    document.getElementById('samplesContainer').innerHTML = '';
+    document.getElementById('summaryContainer').innerHTML = '';
+    document.getElementById('cumulativeContainer').innerHTML = '';
+    document.getElementById('emptyHint').style.display = 'block';
+    sampleCards = [];
+  }
+});
+
+async function saveScreenshot() {
+  const btn = document.getElementById('saveBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '캡처 중...';
+
+  try {
+    if (typeof html2canvas === 'undefined') {
+      throw new Error('html2canvas 로드 실패');
+    }
+    const target = document.body;
+    const canvas = await html2canvas(target, {
+      backgroundColor: '#F5F3EC',
+      scale: Math.min(window.devicePixelRatio || 2, 3)
+    });
+    showSaveModal(canvas);
+  } catch (e) {
+    alert('화면 캡처에 실패했습니다. 인터넷 연결을 확인한 뒤 새로고침 후 다시 시도해 주세요.\n(화면저장 기능은 html2canvas 라이브러리를 인터넷에서 불러와야 동작합니다.)');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function showSaveModal(canvas) {
+  const dataUrl = canvas.toDataURL('image/png');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <img src="${dataUrl}" alt="캡처 이미지">
+      <p>이미지를 <b>길게 눌러</b> "이미지 저장" 또는 "사진에 저장"을 선택하면 갤러리에 저장됩니다.<br>
+      아래 "다운로드" 버튼을 누르면 기기의 다운로드 폴더로도 저장할 수 있습니다.</p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="closeModalBtn">닫기</button>
+        <button class="btn-save" id="downloadBtn">다운로드</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('closeModalBtn').addEventListener('click', () => overlay.remove());
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const ts = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const stamp = `${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`;
+    const link = document.createElement('a');
+    link.download = `고추손해조사_${stamp}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+}
+
+document.getElementById('generateBtn').addEventListener('click', () => {
+  const raw = document.getElementById('ridgeCount').value.trim();
+  const n = parseInt(raw, 10);
+  
+  const allowed = [4, 6, 8, 10];
+  if (!allowed.includes(n) || String(n) !== raw) {
+    alert('표본이랑수는 4, 6, 8, 10만 입력 가능합니다.');
+    return;
+  }
+
+  const container = document.getElementById('samplesContainer');
+  container.innerHTML = '';
+  sampleCards = [];
+
+  for (let i = 1; i <= n; i++) {
+    const card = createSampleCard(i);
+    container.appendChild(card);
+    sampleCards.push(card);
+  }
+
+  renderSummaryCard();
+  renderCumulativeCard(); 
+  updateSummary();
+  document.getElementById('emptyHint').style.display = 'none';
+  saveCurrentState();
+});
+</script>
+</body>
+</html>iv id="emptyHint" class="empty-hint">표본이랑수를 입력하고 "표 생성"을 눌러 시작하세요.</div>
+</main>
+
+<script>
+const CATEGORIES = ['정상','10%','20%','30%','40%','50%','60%','70%','80%','90%','100%','평가제외'];
+const PERCENT_MAP = {
+  '정상':0, '10%':10, '20%':20, '30%':30, '40%':40, '50%':50,
+  '60%':60, '70%':70, '80%':80, '90%':90, '100%':100, '평가제외':null
+};
+const FILLABLE = CATEGORIES.filter(c => c !== '평가제외');
+
+let sampleCards = [];
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadSavedData();
+});
+
+function integerize(floatsArr, total) {
+  const floors = floatsArr.map(f => Math.floor(f));
+  const remainder = total - floors.reduce((a,b)=>a+b,0);
+  const order = floatsArr
+    .map((f,i) => ({ i, frac: f - floors[i] }))
+    .sort((a,b) => b.frac - a.frac);
+  for (let k = 0; k < Math.max(remainder,0); k++) {
+    floors[order[k % order.length].i] += 1;
+  }
+  return floors;
+}
+
+function setCellState(input, state) {
+  input.classList.remove('manual','auto');
+  input.classList.add(state);
+}
+
+function getCellValue(card, cat) {
+  const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
+  const v = input.value.trim();
+  if (v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+function buildCellsHTML() {
+  return CATEGORIES.map(cat => {
+    const excludedClass = cat === '평가제외' ? ' excluded' : '';
+    return `
+      <div class="cell${excludedClass}">
+        <label>${cat}</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*"
+               class="manual" data-cat="${cat}">
+      </div>`;
+  }).join('');
+}
+
+function createSampleCard(index) {
+  const card = document.createElement('section');
+  card.className = 'card';
+  card.dataset.index = index;
+  card.innerHTML = `
+    <div class="card-title"><span class="pepper">🌶️</span>${index}번 표본</div>
+    <div class="cell-grid">${buildCellsHTML()}</div>
+    <div class="result-row">
+      <div class="result-field">
+        <label>합계</label>
+        <input type="text" inputmode="numeric" class="auto" data-role="total" value="0">
+      </div>
+      <div class="result-field">
+        <label>손해정도비율(%)</label>
+        <input type="text" inputmode="decimal" class="auto" data-role="damage" value="0.00">
+      </div>
+      <button class="btn-fill" data-role="fillBtn">채워줘!</button>
+    </div>
+  `;
+
+  card.querySelectorAll('[data-cat]').forEach(input => {
+    input.addEventListener('input', () => {
+      setCellState(input, 'manual');
+      recalcSample(card);
+      saveCurrentState();
+    });
+  });
+
+  const totalInput = card.querySelector('[data-role="total"]');
+  const damageInput = card.querySelector('[data-role="damage"]');
+  
+  totalInput.addEventListener('input', () => {
+    setCellState(totalInput, 'manual');
+    saveCurrentState();
+  });
+  
+  // 1) 합계 클릭 시 입력한 기존 수치를 지워주어 쉽게 타이핑하도록 개선
+  totalInput.addEventListener('focus', () => {
+    totalInput.value = '';
+  });
+  
+  damageInput.addEventListener('input', () => {
+    setCellState(damageInput, 'manual');
+    saveCurrentState();
+  });
+
+  damageInput.addEventListener('focus', () => {
+    damageInput.value = '';
+  });
+
+  card.querySelector('[data-role="fillBtn"]').addEventListener('click', () => {
+    fillBlanks(card);
+    saveCurrentState();
+  });
+
+  return card;
+}
+
+function recalcSample(card) {
+  const values = {};
+  CATEGORIES.forEach(cat => {
+    const v = getCellValue(card, cat);
+    values[cat] = v === null ? 0 : v;
+  });
+
+  const total = Object.values(values).reduce((a,b)=>a+b,0);
+  const excluded = values['평가제외'];
+  const denom = total - excluded;
+  const weighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100 * values[c], 0);
+  const damage = denom > 0 ? (weighted/denom*100) : 0;
+
+  const totalInput = card.querySelector('[data-role="total"]');
+  const damageInput = card.querySelector('[data-role="damage"]');
+  totalInput.value = total;
+  damageInput.value = damage.toFixed(2);
+  setCellState(totalInput, 'auto');
+  setCellState(damageInput, 'auto');
+
+  updateSummary();
+}
+
+function fillBlanks(card) {
+  const totalInput = card.querySelector('[data-role="total"]');
+  const damageInput = card.querySelector('[data-role="damage"]');
+  const targetTotal = parseInt(totalInput.value, 10);
+  const targetDamage = parseFloat(damageInput.value);
+
+  if (Number.isNaN(targetTotal) || Number.isNaN(targetDamage)) {
+    alert('합계와 손해정도비율에 숫자를 입력해 주세요.');
+    return;
+  }
+
+  const known = {};
+  const unknown = [];
+
+  FILLABLE.forEach(cat => {
+    const v = getCellValue(card, cat);
+    if (v !== null && v > 0) {
+      known[cat] = v;
+    } else {
+      unknown.push(cat);
+    }
+  });
+
+  const excludedVal = getCellValue(card, '평가제외') || 0;
+
+  if (unknown.length === 0) {
+    alert('역산하여 채울 빈 칸이 부족합니다. 수동 입력한 숫자 일부를 지우고 실행해 주세요.');
+    return;
+  }
+
+  const knownSum = Object.values(known).reduce((a,b)=>a+b,0);
+  const remaining = targetTotal - knownSum - excludedVal;
+  if (remaining < 0) {
+    alert('입력된 고정값들의 합이 목표 합계보다 큽니다.');
+    return;
+  }
+
+  const denom = targetTotal - excludedVal;
+  if (denom <= 0) {
+    alert('(합계 - 평가제외) 값이 0보다 커야 역산이 가능합니다.');
+    return;
+  }
+
+  const targetWeightedTotal = (targetDamage / 100) * denom;
+  const knownWeighted = Object.entries(known).reduce((sum,[c,v]) => sum + (PERCENT_MAP[c]/100)*v, 0);
+  const weightedRemaining = targetWeightedTotal - knownWeighted;
+
+  const result = {};
+  unknown.forEach(c => result[c] = 0);
+
+  if (remaining > 0) {
+    if (unknown.length === 1) {
+      result[unknown[0]] = remaining;
+    } else {
+      const positions = {};
+      FILLABLE.forEach((c,i) => positions[c] = i);
+      const knownPos = {};
+      Object.entries(known).forEach(([c,v]) => { knownPos[positions[c]] = v; });
+
+      const nearestBefore = (pos) => {
+        const cands = Object.keys(knownPos).map(Number).filter(p => p < pos);
+        return cands.length ? Math.max(...cands) : null;
+      };
+      const nearestAfter = (pos) => {
+        const cands = Object.keys(knownPos).map(Number).filter(p => p > pos);
+        return cands.length ? Math.min(...cands) : null;
+      };
+
+      const unknownSorted = [...unknown].sort((a,b) => positions[a]-positions[b]);
+      const shape = unknownSorted.map(cat => {
+        const pos = positions[cat];
+        const pb = nearestBefore(pos), pa = nearestAfter(pos);
+        let val;
+        if (pb !== null && pa !== null) {
+          const vb = knownPos[pb], va = knownPos[pa];
+          val = vb + (va-vb) * (pos-pb)/(pa-pb);
+        } else if (pb !== null) {
+          val = knownPos[pb];
+        } else if (pa !== null) {
+          val = knownPos[pa];
+        } else {
+          val = 1;
+        }
+        return Math.max(val, 0);
+      });
+
+      let totalShape = shape.reduce((a,b)=>a+b,0);
+      let shapeUse = shape;
+      if (totalShape <= 0) {
+        shapeUse = unknownSorted.map(() => 1);
+        totalShape = unknownSorted.length;
+      }
+
+      const baselineFloat = shapeUse.map(s => remaining * s / totalShape);
+      const baselineInt = integerize(baselineFloat, remaining);
+
+      const percents = unknownSorted.map(c => PERCENT_MAP[c]);
+      let currentWeighted = percents.reduce((sum,p,i) => sum + (p/100)*baselineInt[i], 0);
+      let diff = weightedRemaining - currentWeighted;
+
+      let safetyLoop = 0;
+      while (Math.abs(diff) > 0.0001 && safetyLoop < 100) {
+        safetyLoop++;
+        let bestIdx = -1;
+        let minErr = Infinity;
+        let optimalDelta = 0;
+
+        for (let i = 0; i < baselineInt.length; i++) {
+          for (let j = 0; j < baselineInt.length; j++) {
+            if (i === j) continue;
+            if (baselineInt[i] > 0) {
+              const weightChange = (percents[j] - percents[i]) / 100;
+              const newDiff = diff - weightChange;
+              if (Math.abs(newDiff) < minErr) {
+                minErr = Math.abs(newDiff);
+                bestIdx = i;
+                optimalDelta = j;
+              }
+            }
+          }
+        }
+
+        if (bestIdx !== -1 && minErr < Math.abs(diff)) {
+          baselineInt[bestIdx]--;
+          baselineInt[optimalDelta]++;
+          currentWeighted = percents.reduce((sum,p,i) => sum + (p/100)*baselineInt[i], 0);
+          diff = weightedRemaining - currentWeighted;
+        } else {
+          break;
+        }
+      }
+      unknownSorted.forEach((cat,i) => { result[cat] = baselineInt[i]; });
+    }
+  }
+
+  FILLABLE.forEach(cat => {
+    const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
+    if (unknown.includes(cat)) {
+      const val = result[cat] || 0;
+      input.value = val;
+      setCellState(input, 'auto');
+    }
+  });
+
+  const finalValues = {};
+  CATEGORIES.forEach(cat => {
+    const v = getCellValue(card, cat);
+    finalValues[cat] = v === null ? 0 : v;
+  });
+  const finalTotal = Object.values(finalValues).reduce((a,b)=>a+b,0);
+  const finalExcluded = finalValues['평가제외'];
+  const finalDenom = finalTotal - finalExcluded;
+  const finalWeighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100 * finalValues[c], 0);
+  const finalDamage = finalDenom > 0 ? (finalWeighted/finalDenom*100) : 0;
+
+  totalInput.value = finalTotal;
+  damageInput.value = finalDamage.toFixed(2);
+  setCellState(totalInput, 'auto');
+  setCellState(damageInput, 'auto');
+
+  updateSummary();
+}
+
+function renderSummaryCard() {
+  const container = document.getElementById('summaryContainer');
+  container.innerHTML = `
+    <section class="card summary" id="summaryCard">
+      <div class="card-title"><span class="pepper">🌶️</span>표본합계</div>
+      <div class="cell-grid">
+        ${CATEGORIES.map(cat => `
+          <div class="cell${cat === '평가제외' ? ' excluded' : ''}">
+            <label>${cat}</label>
+            <input type="text" data-sum-cat="${cat}" value="0" disabled>
+          </div>`).join('')}
+      </div>
+      <div class="result-row">
+        <div class="result-field">
+          <label>합계</label>
+          <input type="text" id="summaryTotal" value="0" disabled>
+        </div>
+        <div class="result-field">
+          <label>손해정도비율(%)</label>
+          <input type="text" id="summaryDamage" value="0.00" disabled>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderCumulativeCard() {
+  const container = document.getElementById('cumulativeContainer');
+  container.innerHTML = `
+    <section class="card cumulative" id="cumulativeCard">
+      <div class="card-title">📊 누적피해율 계산표</div>
+      <div class="cell-grid" style="grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));">
+        <div class="cell">
+          <label>면적피해율(%)</label>
+          <input type="text" id="areaDamageRate" value="100.0" inputmode="decimal">
+        </div>
+        <div class="cell">
+          <label>손해정도비율(%)</label>
+          <input type="text" id="cumuDamageRate" class="readonly-input" value="0.00" disabled>
+        </div>
+        <div class="cell">
+          <label>미보상비율(%)</label>
+          <input type="text" id="nonInsuredRate" placeholder="0.0" inputmode="decimal">
+        </div>
+        <div class="cell">
+          <label>병충해인정비율(%)</label>
+          <input type="text" id="pestRecognizeRate" placeholder="70, 50, 30" inputmode="numeric">
+        </div>
+        <div class="cell">
+          <label>경과비율(%)</label>
+          <input type="text" id="elapsedRate" placeholder="0.00" inputmode="decimal">
+        </div>
+      </div>
+      <div class="cumu-result-row">
+        <div class="cumu-result-title">누적피해율</div>
+        <div class="cumu-result-value" id="finalCumulativeRate">0.00%</div>
+        <button class="btn-save" id="saveBtn">화면저장</button>
+      </div>
+    </section>
+  `;
+
+  const areaInput = document.getElementById('areaDamageRate');
+  areaInput.addEventListener('input', () => {
+    let val = areaInput.value.replace(/[^0-9.]/g, '');
+    const parts = val.split('.');
+    if (parts.length > 2) {
+      val = parts[0] + '.' + parts.slice(1).join('');
+    }
+    if (parts.length === 2 && parts[1].length > 1) {
+      val = parts[0] + '.' + parts[1].substring(0, 1);
+    }
+    areaInput.value = val;
+
+    recalcCumulative();
+    saveCurrentState();
+  });
+
+  const pestInput = document.getElementById('pestRecognizeRate');
+  pestInput.addEventListener('change', () => {
+    const val = parseInt(pestInput.value.trim(), 10);
+    if (pestInput.value.trim() !== '' && ![70, 50, 30].includes(val)) {
+      alert('병충해인정비율은 70, 50, 30만 입력 가능합니다.');
+      pestInput.value = '';
+    }
+    recalcCumulative();
+    saveCurrentState();
+  });
+
+  ['nonInsuredRate', 'elapsedRate'].forEach(id => {
+    const input = document.getElementById(id);
+    input.addEventListener('input', () => {
+      recalcCumulative();
+      saveCurrentState();
+    });
+  });
+
+  ['areaDamageRate', 'nonInsuredRate', 'pestRecognizeRate', 'elapsedRate'].forEach(id => {
+    const input = document.getElementById(id);
+    input.addEventListener('focus', () => {
+      input.value = '';
+    });
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', saveScreenshot);
+}
+
+function updateSummary() {
+  const summaryCard = document.getElementById('summaryCard');
+  if (!summaryCard) return;
+
+  const totals = {};
+  CATEGORIES.forEach(cat => totals[cat] = 0);
+  sampleCards.forEach(card => {
+    CATEGORIES.forEach(cat => {
+      const v = getCellValue(card, cat);
+      totals[cat] += (v === null ? 0 : v);
+    });
+  });
+
+  CATEGORIES.forEach(cat => {
+    summaryCard.querySelector(`[data-sum-cat="${CSS.escape(cat)}"]`).value = totals[cat];
+  });
+
+  const total = Object.values(totals).reduce((a,b)=>a+b,0);
+  const excluded = totals['평가제외'];
+  const denom = total - excluded;
+  const weighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100*totals[c], 0);
+  const damage = denom > 0 ? (weighted/denom*100) : 0;
+
+  document.getElementById('summaryTotal').value = total;
+  document.getElementById('summaryDamage').value = damage.toFixed(2);
+
+  const cumuDamageRateInput = document.getElementById('cumuDamageRate');
+  if (cumuDamageRateInput) {
+    cumuDamageRateInput.value = damage.toFixed(2);
+    recalcCumulative();
+  }
+}
+
+function recalcCumulative() {
+  const areaRaw = document.getElementById('areaDamageRate').value.trim();
+  const areaRate = areaRaw === '' ? 100.0 : parseFloat(areaRaw);
+  
+  const damageRate = parseFloat(document.getElementById('cumuDamageRate').value) || 0;
+  
+  const nonInsuredRaw = document.getElementById('nonInsuredRate').value.trim();
+  const nonInsuredRate = nonInsuredRaw === '' ? 0 : parseFloat(nonInsuredRaw); 
+  
+  const pestRaw = document.getElementById('pestRecognizeRate').value.trim();
+  const pestRate = pestRaw === '' ? 100.0 : parseFloat(pestRaw);
+  
+  const elapsedRate = parseFloat(document.getElementById('elapsedRate').value) || 0;
+
+  const areaTerm = areaRate / 100;
+  const damageTerm = damageRate / 100;
+  const nonInsuredTerm = 1 - (nonInsuredRate / 100);
+  const pestTerm = pestRate / 100;
+  const elapsedTerm = elapsedRate / 100;
+
+  const result = areaTerm * damageTerm * nonInsuredTerm * pestTerm * elapsedTerm * 100;
+  
+  document.getElementById('finalCumulativeRate').textContent = result.toFixed(2) + '%';
+}
+
+function saveCurrentState() {
+  const ridgeCount = document.getElementById('ridgeCount').value.trim();
+  const cardsData = sampleCards.map(card => {
+    const cats = {};
+    CATEGORIES.forEach(cat => {
+      cats[cat] = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`).value;
+    });
+    return {
+      index: card.dataset.index,
+      categories: cats,
+      total: card.querySelector('[data-role="total"]').value,
+      damage: card.querySelector('[data-role="damage"]').value,
+      totalState: card.querySelector('[data-role="total"]').classList.contains('manual') ? 'manual' : 'auto',
+      damageState: card.querySelector('[data-role="damage"]').classList.contains('manual') ? 'manual' : 'auto'
+    };
+  });
+
+  localStorage.setItem('pepper_ridgeCount', ridgeCount);
+  localStorage.setItem('pepper_cardsData', JSON.stringify(catsData));
 
   if (document.getElementById('areaDamageRate')) {
     localStorage.setItem('cumu_areaDamageRate', document.getElementById('areaDamageRate').value);
