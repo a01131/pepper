@@ -465,6 +465,7 @@ function recalcSample(card) {
   updateSummary();
 }
 
+// 완전히 개선된 지능형 채워줘(역산) 함수
 function fillBlanks(card) {
   const totalInput = card.querySelector('[data-role="total"]');
   const damageInput = card.querySelector('[data-role="damage"]');
@@ -478,29 +479,34 @@ function fillBlanks(card) {
 
   const known = {};
   const unknown = [];
+
+  // 핵심 변경: 사용자가 직접 입력한 '1 이상의 정수'만 보호(known)하고, 0 또는 빈칸은 모두 역산 대상(unknown)으로 흡수
   FILLABLE.forEach(cat => {
     const v = getCellValue(card, cat);
-    if (v !== null) known[cat] = v;
-    else unknown.push(cat);
+    if (v !== null && v > 0) {
+      known[cat] = v;
+    } else {
+      unknown.push(cat);
+    }
   });
 
   const excludedVal = getCellValue(card, '평가제외') || 0;
 
   if (unknown.length === 0) {
-    alert('채울 빈 항목이 없습니다.');
+    alert('역산하여 채울 빈 칸이 부족합니다. 수동 입력한 숫자 일부를 지우고 실행해 주세요.');
     return;
   }
 
   const knownSum = Object.values(known).reduce((a,b)=>a+b,0);
   const remaining = targetTotal - knownSum - excludedVal;
   if (remaining < 0) {
-    alert('합계가 이미 입력된 값들의 합보다 작습니다.');
+    alert('입력된 고정값들의 합이 목표 합계보다 큽니다.');
     return;
   }
 
   const denom = targetTotal - excludedVal;
   if (denom <= 0) {
-    alert('(합계 - 평가제외) 값이 0보다 커야 합니다.');
+    alert('(합계 - 평가제외) 값이 0보다 커야 역산이 가능합니다.');
     return;
   }
 
@@ -596,21 +602,31 @@ function fillBlanks(card) {
     }
   }
 
-  Object.entries(result).forEach(([cat,val]) => {
+  // 0으로 채워질 대상을 포함해 역산 결과 반영
+  FILLABLE.forEach(cat => {
     const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
-    input.value = Math.max(val, 0);
-    setCellState(input, 'auto');
+    if (unknown.includes(cat)) {
+      const val = result[cat] || 0;
+      input.value = val;
+      setCellState(input, 'auto');
+    }
   });
 
-  const values = {};
+  // 역산이 완전히 끝난 후 정합성 재계산
+  const finalValues = {};
   CATEGORIES.forEach(cat => {
     const v = getCellValue(card, cat);
-    values[cat] = v === null ? 0 : v;
+    finalValues[cat] = v === null ? 0 : v;
   });
-  const total = Object.values(values).reduce((a,b)=>a+b,0);
+  const finalTotal = Object.values(finalValues).reduce((a,b)=>a+b,0);
+  const finalExcluded = finalValues['평가제외'];
+  const finalDenom = finalTotal - finalExcluded;
+  const finalWeighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100 * finalValues[c], 0);
+  const finalDamage = finalDenom > 0 ? (finalWeighted/finalDenom*100) : 0;
 
-  totalInput.value = total;
-  damageInput.value = targetDamage.toFixed(2);
+  totalInput.value = finalTotal;
+  // 역산 보정된 실제 도달 가능한 정수 근사비율을 매칭 반영
+  damageInput.value = finalDamage.toFixed(2);
   setCellState(totalInput, 'auto');
   setCellState(damageInput, 'auto');
 
@@ -765,7 +781,6 @@ function recalcCumulative() {
   const nonInsuredRaw = document.getElementById('nonInsuredRate').value.trim();
   const nonInsuredRate = nonInsuredRaw === '' ? 0 : parseFloat(nonInsuredRaw); 
   
-  // 병충해 인정비율 미입력 시 100.0%를 기본값으로 사용
   const pestRaw = document.getElementById('pestRecognizeRate').value.trim();
   const pestRate = pestRaw === '' ? 100.0 : parseFloat(pestRaw);
   
