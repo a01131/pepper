@@ -315,7 +315,7 @@
 
 <header>
   <h1>🌶️ 고추 손해정도 비율 계산</h1>
-  <p>2026년 조사용(ver 1.2 JKSong)</p>
+  <p>2026년 조사용(ver 1.1 JKSong)</p>
 </header>
 
 <div class="controls">
@@ -494,7 +494,6 @@ function fillBlanks(card) {
     return;
   }
 
-  // 평가제외를 고정한 상태에서 극단값(0%, 100%)을 채워주는 보정 필터
   const excludedVal = getCellValue(card, '평가제외') || 0;
   const usableTotal = targetTotal - excludedVal;
 
@@ -503,6 +502,7 @@ function fillBlanks(card) {
     return;
   }
 
+  // 극단값(0%, 100%) 예외 처리 기능 유지
   if (targetDamage === 0) {
     FILLABLE.forEach(cat => {
       const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
@@ -551,13 +551,15 @@ function fillBlanks(card) {
   }
 
   const knownSum = Object.values(known).reduce((a,b)=>a+b,0);
-  const remaining = targetTotal - knownSum - excludedVal;
+  
+  // ★ 완전 해결 교정: 가중치 배분 연산 시 remaining 계산에서 평가제외(excludedVal)를 마이너스 차감하지 않음!
+  // 평가제외는 고정 수치로 보존하되, 순수 피해 분배 수량은 목표 합계에서 고정된 기입 값들만 빼어 관리합니다.
+  const remaining = targetTotal - knownSum - excludedVal; 
   if (remaining < 0) {
     alert('입력된 고정값들과 평가제외의 합이 목표 합계보다 큽니다.');
     return;
   }
 
-  // 분모(denom) 기준에 맞춘 순수 목표 분자값 산출
   const targetWeightedTotal = (targetDamage / 100) * denom;
   const knownWeighted = Object.entries(known).reduce((sum,[c,v]) => sum + (PERCENT_MAP[c]/100)*v, 0);
   const weightedRemaining = targetWeightedTotal - knownWeighted;
