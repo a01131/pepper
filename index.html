@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>고추 손해정도비율 계산</title>
+<title>고추 손해정도 비율 계산</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root {
@@ -315,7 +315,7 @@
 
 <header>
   <h1>🌶️ 고추 손해정도 비율 계산</h1>
-  <p>2026년도 조사용(ver 1.1 jksong)</p>
+  <p>2026년 조사용(ver 1.0)</p>
 </header>
 
 <div class="controls">
@@ -389,6 +389,11 @@ function buildCellsHTML() {
   }).join('');
 }
 
+// 부동소수점 한계를 극복하고 셋째자리에서 정확히 반올림 연산하는 함수
+function roundToTwo(num) {
+  return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
 function createSampleCard(index) {
   const card = document.createElement('section');
   card.className = 'card';
@@ -453,11 +458,13 @@ function recalcSample(card) {
     values[cat] = v === null ? 0 : v;
   });
 
+  // 변경 요건 반영: 분모(denom)에 평가제외를 차감하지 않고 전체 합계를 그대로 적용
   const total = Object.values(values).reduce((a,b)=>a+b,0);
-  const excluded = values['평가제외'];
-  const denom = total - excluded;
+  const denom = total; 
   const weighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100 * values[c], 0);
-  const damage = denom > 0 ? (weighted/denom*100) : 0;
+  
+  // 소수점 셋째자리 정밀 반올림 적용
+  const damage = denom > 0 ? roundToTwo(weighted/denom*100) : 0;
 
   const totalInput = card.querySelector('[data-role="total"]');
   const damageInput = card.querySelector('[data-role="damage"]');
@@ -480,26 +487,20 @@ function fillBlanks(card) {
     return;
   }
 
-  const excludedVal = getCellValue(card, '평가제외') || 0;
-  const usableTotal = targetTotal - excludedVal;
-
-  if (usableTotal < 0) {
-    alert('평가제외 개수가 합계보다 클 수 없습니다.');
+  // 역산 시에도 분모 기준은 평가제외를 분리에 빼지 않고 전체 목표합계(targetTotal)를 그대로 분모로 칭함
+  const denom = targetTotal; 
+  if (denom <= 0) {
+    alert('합계 값이 0보다 커야 역산이 가능합니다.');
     return;
   }
 
-  // ★ 중요 추가: 극단값(0% 및 100%) 예외 처리 적용
-  // 수치 분배 가중치 필터를 완전히 바이패스(우회)하여 다른 칸에 소수점이 퍼지지 않도록 강제 정렬합니다.
   if (targetDamage === 0) {
     FILLABLE.forEach(cat => {
       const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
-      if (cat === '정상') {
-        input.value = usableTotal;
-      } else {
-        input.value = 0;
-      }
+      input.value = (cat === '정상') ? denom : 0;
       setCellState(input, 'auto');
     });
+    card.querySelector(`[data-cat="평가제외"]`).value = 0;
 
     totalInput.value = targetTotal;
     damageInput.value = "0.00";
@@ -512,13 +513,10 @@ function fillBlanks(card) {
   if (targetDamage === 100) {
     FILLABLE.forEach(cat => {
       const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
-      if (cat === '100%') {
-        input.value = usableTotal;
-      } else {
-        input.value = 0;
-      }
+      input.value = (cat === '100%') ? denom : 0;
       setCellState(input, 'auto');
     });
+    card.querySelector(`[data-cat="평가제외"]`).value = 0;
 
     totalInput.value = targetTotal;
     damageInput.value = "100.00";
@@ -528,9 +526,11 @@ function fillBlanks(card) {
     return;
   }
 
-  // 일반 비율 역산 처리 구간 (수동 입력 자연수값 보호)
   const known = {};
   const unknown = [];
+
+  // 평가제외 칸은 고정 보호값으로 두고 가중치 분배에서만 제외
+  const excludedVal = getCellValue(card, '평가제외') || 0;
 
   FILLABLE.forEach(cat => {
     const v = getCellValue(card, cat);
@@ -549,13 +549,7 @@ function fillBlanks(card) {
   const knownSum = Object.values(known).reduce((a,b)=>a+b,0);
   const remaining = targetTotal - knownSum - excludedVal;
   if (remaining < 0) {
-    alert('입력된 고정값들의 합이 목표 합계보다 큽니다.');
-    return;
-  }
-
-  const denom = targetTotal - excludedVal;
-  if (denom <= 0) {
-    alert('(합계 - 평가제외) 값이 0보다 커야 역산이 가능합니다.');
+    alert('입력된 고정값들과 평가제외의 합이 목표 합계보다 큽니다.');
     return;
   }
 
@@ -666,10 +660,9 @@ function fillBlanks(card) {
     finalValues[cat] = v === null ? 0 : v;
   });
   const finalTotal = Object.values(finalValues).reduce((a,b)=>a+b,0);
-  const finalExcluded = finalValues['평가제외'];
-  const finalDenom = finalTotal - finalExcluded;
+  const finalDenom = finalTotal; 
   const finalWeighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100 * finalValues[c], 0);
-  const finalDamage = finalDenom > 0 ? (finalWeighted/finalDenom*100) : 0;
+  const finalDamage = finalDenom > 0 ? roundToTwo(finalWeighted/finalDenom*100) : 0;
 
   totalInput.value = finalTotal;
   damageInput.value = finalDamage.toFixed(2);
@@ -803,10 +796,9 @@ function updateSummary() {
   });
 
   const total = Object.values(totals).reduce((a,b)=>a+b,0);
-  const excluded = totals['평가제외'];
-  const denom = total - excluded;
+  const denom = total; 
   const weighted = FILLABLE.reduce((sum,c) => sum + PERCENT_MAP[c]/100*totals[c], 0);
-  const damage = denom > 0 ? (weighted/denom*100) : 0;
+  const damage = denom > 0 ? roundToTwo(weighted/denom*100) : 0;
 
   document.getElementById('summaryTotal').value = total;
   document.getElementById('summaryDamage').value = damage.toFixed(2);
@@ -838,7 +830,9 @@ function recalcCumulative() {
   const pestTerm = pestRate / 100;
   const elapsedTerm = elapsedRate / 100;
 
-  const result = areaTerm * damageTerm * nonInsuredTerm * pestTerm * elapsedTerm * 100;
+  // 소수점 상태 연산 후 최종 100 곱셈 후 세번째자리 반올림
+  const resultRaw = areaTerm * damageTerm * nonInsuredTerm * pestTerm * elapsedTerm * 100;
+  const result = roundToTwo(resultRaw);
   
   document.getElementById('finalCumulativeRate').textContent = result.toFixed(2) + '%';
 }
