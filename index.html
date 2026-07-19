@@ -315,7 +315,7 @@
 
 <header>
   <h1>🌶️ 고추 손해정도 비율 계산</h1>
-  <p>2026년 조사용(ver 1.1 JKSong)</p>
+  <p>2026년 조사용(ver 1.2 JKSong)</p>
 </header>
 
 <div class="controls">
@@ -461,8 +461,9 @@ function recalcSample(card) {
   const total = Object.values(values).reduce((a,b)=>a+b,0);
   const denom = total; 
   
-  // 분자: 평가제외 항목은 수식에서 완전히 차단하고 순수 FILLABLE(정상~100%) 항목들의 가중치만 계산
-  const weighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100) * values[c], 0);
+  // 분자 계산식 수정: 순수 피해 항목 가중치 총합에 '평가제외' 수량 수치를 그대로 가중치 100%로 가산
+  const pureWeighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100) * values[c], 0);
+  const weighted = pureWeighted + values['평가제외'];
   
   // 소수점 셋째자리 정밀 반올림
   const damage = denom > 0 ? roundToTwo((weighted / denom) * 100) : 0;
@@ -502,7 +503,7 @@ function fillBlanks(card) {
     return;
   }
 
-  // 극단값(0%, 100%) 예외 처리 기능 유지
+  // 극단값 예외 처리 규칙 수정 (새 계산식 매칭용 보정)
   if (targetDamage === 0) {
     FILLABLE.forEach(cat => {
       const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
@@ -512,21 +513,6 @@ function fillBlanks(card) {
 
     totalInput.value = targetTotal;
     damageInput.value = "0.00";
-    setCellState(totalInput, 'auto');
-    setCellState(damageInput, 'auto');
-    updateSummary();
-    return;
-  }
-
-  if (targetDamage === 100) {
-    FILLABLE.forEach(cat => {
-      const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
-      input.value = (cat === '100%') ? usableTotal : 0;
-      setCellState(input, 'auto');
-    });
-
-    totalInput.value = targetTotal;
-    damageInput.value = "100.00";
     setCellState(totalInput, 'auto');
     setCellState(damageInput, 'auto');
     updateSummary();
@@ -551,16 +537,14 @@ function fillBlanks(card) {
   }
 
   const knownSum = Object.values(known).reduce((a,b)=>a+b,0);
-  
-  // ★ 완전 해결 교정: 가중치 배분 연산 시 remaining 계산에서 평가제외(excludedVal)를 마이너스 차감하지 않음!
-  // 평가제외는 고정 수치로 보존하되, 순수 피해 분배 수량은 목표 합계에서 고정된 기입 값들만 빼어 관리합니다.
   const remaining = targetTotal - knownSum - excludedVal; 
   if (remaining < 0) {
     alert('입력된 고정값들과 평가제외의 합이 목표 합계보다 큽니다.');
     return;
   }
 
-  const targetWeightedTotal = (targetDamage / 100) * denom;
+  // 역산 분자 조건 보정: 목표 분자 총합에서 '평가제외' 가치를 사전에 공제해 주어 순수 빈칸 역산의 정합성을 확보
+  const targetWeightedTotal = ((targetDamage / 100) * denom) - excludedVal;
   const knownWeighted = Object.entries(known).reduce((sum,[c,v]) => sum + (PERCENT_MAP[c]/100)*v, 0);
   const weightedRemaining = targetWeightedTotal - knownWeighted;
 
@@ -668,7 +652,7 @@ function fillBlanks(card) {
   });
   const finalTotal = Object.values(finalValues).reduce((a,b)=>a+b,0);
   const finalDenom = finalTotal; 
-  const finalWeighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100) * finalValues[c], 0);
+  const finalWeighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100) * finalValues[c], 0) + finalValues['평가제외'];
   const finalDamage = finalDenom > 0 ? roundToTwo((finalWeighted / finalDenom) * 100) : 0;
 
   totalInput.value = finalTotal;
@@ -804,7 +788,8 @@ function updateSummary() {
 
   const total = Object.values(totals).reduce((a,b)=>a+b,0);
   const denom = total; 
-  const weighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100)*totals[c], 0);
+  const pureWeighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100)*totals[c], 0);
+  const weighted = pureWeighted + totals['평가제외'];
   const damage = denom > 0 ? roundToTwo((weighted / denom) * 100) : 0;
 
   document.getElementById('summaryTotal').value = total;
