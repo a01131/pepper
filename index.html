@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>고추 손해정도비율 계산</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- 엑셀 저장을 위한 SheetJS 라이브러리 추가 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #F5F3EC;
@@ -21,6 +23,7 @@
     --border: #DAD6C8;
     --amber: #B8823A;
     --blue-deep: #1A365D;
+    --excel-green: #107C41;
   }
 
   * { box-sizing: border-box; }
@@ -102,6 +105,7 @@
   .btn-primary { background: var(--green-deep); color: #fff; }
   .btn-fill { background: var(--amber); color: #fff; }
   .btn-save { background: #2E5AAC; color: #fff; }
+  .btn-excel { background: var(--excel-green); color: #fff; }
   .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--border); }
   .btn-danger { background: #c0392b; color: #fff; padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; margin-left: auto;}
 
@@ -255,10 +259,15 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
   }
   .cumu-result-title { font-weight: 700; color: var(--blue-deep); font-size: 1rem; }
-  .cumu-result-value { font-size: 1.3rem; font-weight: 800; color: var(--auto); font-variant-numeric: tabular-nums; margin-right: auto; margin-left: 10px;}
+  .cumu-result-value { font-size: 1.3rem; font-weight: 800; color: var(--auto); font-variant-numeric: tabular-nums; margin-right: auto; margin-left: 6px;}
+
+  .action-btn-group {
+    display: flex;
+    gap: 6px;
+  }
 
   .modal-overlay {
     position: fixed;
@@ -457,15 +466,12 @@ function recalcSample(card) {
     values[cat] = v === null ? 0 : v;
   });
 
-  // 분모: 평가제외 항목까지 모두 포함한 전체 합계 개수
   const total = Object.values(values).reduce((a,b)=>a+b,0);
   const denom = total; 
   
-  // 분자 계산식 수정: 순수 피해 항목 가중치 총합에 '평가제외' 수량 수치를 그대로 가중치 100%로 가산
   const pureWeighted = FILLABLE.reduce((sum,c) => sum + (PERCENT_MAP[c]/100) * values[c], 0);
   const weighted = pureWeighted + values['평가제외'];
   
-  // 소수점 셋째자리 정밀 반올림
   const damage = denom > 0 ? roundToTwo((weighted / denom) * 100) : 0;
 
   const totalInput = card.querySelector('[data-role="total"]');
@@ -503,7 +509,6 @@ function fillBlanks(card) {
     return;
   }
 
-  // 극단값 예외 처리 규칙 수정 (새 계산식 매칭용 보정)
   if (targetDamage === 0) {
     FILLABLE.forEach(cat => {
       const input = card.querySelector(`[data-cat="${CSS.escape(cat)}"]`);
@@ -543,7 +548,6 @@ function fillBlanks(card) {
     return;
   }
 
-  // 역산 분자 조건 보정: 목표 분자 총합에서 '평가제외' 가치를 사전에 공제해 주어 순수 빈칸 역산의 정합성을 확보
   const targetWeightedTotal = ((targetDamage / 100) * denom) - excludedVal;
   const knownWeighted = Object.entries(known).reduce((sum,[c,v]) => sum + (PERCENT_MAP[c]/100)*v, 0);
   const weightedRemaining = targetWeightedTotal - knownWeighted;
@@ -719,7 +723,10 @@ function renderCumulativeCard() {
       <div class="cumu-result-row">
         <div class="cumu-result-title">누적피해율</div>
         <div class="cumu-result-value" id="finalCumulativeRate">0.00%</div>
-        <button class="btn-save" id="saveBtn">화면저장</button>
+        <div class="action-btn-group">
+          <button class="btn-save" id="saveBtn">화면저장</button>
+          <button class="btn-excel" id="excelBtn">엑셀저장</button>
+        </div>
       </div>
     </section>
   `;
@@ -767,6 +774,7 @@ function renderCumulativeCard() {
   });
 
   document.getElementById('saveBtn').addEventListener('click', saveScreenshot);
+  document.getElementById('excelBtn').addEventListener('click', exportToExcel);
 }
 
 function updateSummary() {
@@ -914,6 +922,76 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
     sampleCards = [];
   }
 });
+
+// 엑셀 저장 전용 함수
+function exportToExcel() {
+  if (typeof XLSX === 'undefined') {
+    alert('엑셀 라이브러리를 불러오지 못했습니다. 인터넷 연결 상태를 확인해 주세요.');
+    return;
+  }
+
+  const excelRows = [];
+  
+  // 헤더 생성
+  const headerRow = ['구분', ...CATEGORIES, '합계', '손해정도비율(%)'];
+  excelRows.push(headerRow);
+
+  // 1. 표본 데이터 수집
+  sampleCards.forEach(card => {
+    const idx = card.dataset.index + '번 표본';
+    const row = [idx];
+    CATEGORIES.forEach(cat => {
+      row.push(getCellValue(card, cat) || 0);
+    });
+    row.push(parseInt(card.querySelector('[data-role="total"]').value, 10) || 0);
+    row.push(parseFloat(card.querySelector('[data-role="damage"]').value) || 0);
+    excelRows.push(row);
+  });
+
+  // 2. 표본합계 데이터 수집
+  const summaryCard = document.getElementById('summaryCard');
+  if (summaryCard) {
+    const sumRow = ['표본합계'];
+    CATEGORIES.forEach(cat => {
+      const val = parseInt(summaryCard.querySelector(`[data-sum-cat="${CSS.escape(cat)}"]`).value, 10) || 0;
+      sumRow.push(val);
+    });
+    sumRow.push(parseInt(document.getElementById('summaryTotal').value, 10) || 0);
+    sumRow.push(parseFloat(document.getElementById('summaryDamage').value) || 0);
+    excelRows.push(sumRow);
+  }
+
+  // 여백 줄 추가
+  excelRows.push([]);
+  excelRows.push(['[ 누적피해율 산출 내역 ]']);
+
+  // 3. 누적피해율 데이터 수집
+  const areaRate = document.getElementById('areaDamageRate').value || '100.0';
+  const damageRate = document.getElementById('cumuDamageRate').value || '0.00';
+  const nonInsuredRate = document.getElementById('nonInsuredRate').value || '0.0';
+  const pestRate = document.getElementById('pestRecognizeRate').value || '100.0';
+  const elapsedRate = document.getElementById('elapsedRate').value || '0.00';
+  const finalCumuRate = document.getElementById('finalCumulativeRate').textContent;
+
+  excelRows.push(['면적피해율(%)', areaRate + '%']);
+  excelRows.push(['손해정도비율(%)', damageRate + '%']);
+  excelRows.push(['미보상비율(%)', nonInsuredRate + '%']);
+  excelRows.push(['병충해인정비율(%)', pestRate + '%']);
+  excelRows.push(['경과비율(%)', elapsedRate + '%']);
+  excelRows.push(['최종 누적피해율', finalCumuRate]);
+
+  // 워크시트 및 워크북 생성
+  const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "고추손해조사");
+
+  // 파일 저장 타임스탬프 생성
+  const ts = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const stamp = `${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}_${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`;
+
+  XLSX.writeFile(workbook, `고추손해조사_${stamp}.xlsx`);
+}
 
 async function saveScreenshot() {
   const btn = document.getElementById('saveBtn');
